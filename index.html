@@ -2,13 +2,11 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>A máquina não vê seu rosto</title>
+<title>Reconhecimento Facial VTRN</title>
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
 <style>
-  :root{ --paper:#ece7db; --ink:#171513; --red:#b0291f; }
-  body{background:var(--paper); color:var(--ink); font-family:sans-serif; padding:20px;}
-  .stage{position:relative; width:640px; height:480px; background:#000;}
+  body{background:#ece7db; display:flex; flex-direction:column; align-items:center; font-family:sans-serif;}
+  .stage{position:relative; width:640px; height:480px; background:#000; margin-top:20px;}
   #video, #overlay{position:absolute; inset:0; width:100%; height:100%;}
   .hidden{display:none!important;}
 </style>
@@ -19,27 +17,24 @@
   <video id="video" autoplay muted playsinline></video>
   <canvas id="overlay"></canvas>
   <div id="startCover" style="position:absolute; inset:0; z-index:10; background:rgba(0,0,0,0.8); color:#fff; display:flex; align-items:center; justify-content:center;">
-    <button id="startBtn" style="padding:20px;">Ativar Câmera</button>
+    <button id="startBtn" style="padding:20px; cursor:pointer;">ATIVAR CÂMERA</button>
   </div>
 </div>
 
 <div style="margin-top:20px;">
-  <button id="capA">Guardar Pessoa A</button>
-  <button id="clearBtn">Limpar Referências</button>
-  <p id="status">Aguardando...</p>
+  <button id="capA">GUARDAR PESSOA A</button>
+  <button id="clearBtn">LIMPAR</button>
+  <p id="status">Status: Aguardando A...</p>
 </div>
 
 <script>
 (function(){
   const video = document.getElementById("video");
-  const overlay = document.getElementById("overlay");
-  const octx = overlay.getContext("2d");
+  const startBtn = document.getElementById("startBtn");
+  const status = document.getElementById("status");
   
-  let running = false, modelsReady = false, lastDescriptor = null;
+  let running = false, lastDescriptor = null;
   const refs = {A: null};
-  
-  // VARIAVEIS DA TRAVA (A "Anti-metralhadora")
-  let ultimoReconhecido = null;
   let bloqueioDeEnvio = false;
 
   async function start(){
@@ -62,7 +57,7 @@
         lastDescriptor = res.descriptor;
         updateDecision();
       }
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 200));
     }
   }
 
@@ -71,25 +66,29 @@
     
     const dist = Math.sqrt(refs.A.reduce((s, a, i) => s + Math.pow(a - lastDescriptor[i], 2), 0));
     
-    // LOGICA DA TRAVA
-    if(dist < 0.5) { // Limiar de precisão
+    // DEBUG: Verifique isso no CONSOLE do navegador
+    console.log("Distância atual:", dist.toFixed(3));
+    
+    if(dist < 0.8) { // Tolerância aumentada para 0.8
+      status.textContent = "Status: Pessoa A Reconhecida! Distância: " + dist.toFixed(3);
+      
       if(!bloqueioDeEnvio) {
-        bloqueioDeEnvio = true; // Trava o envio
+        bloqueioDeEnvio = true;
+        console.log("ENVIANDO COMANDO PARA O ESP32...");
         
-        console.log("Enviando comando para o ESP32...");
-        // ENDEREÇO DO SEU ESP32
         fetch("http://192.168.100.81/reconhecido")
-          .then(() => console.log("Comando enviado com sucesso!"))
-          .catch(err => console.error("Erro ao conectar no ESP32:", err));
+          .then(res => console.log("ESP32 respondeu:", res.status))
+          .catch(err => console.error("ERRO AO CONECTAR ESP32:", err));
         
-        // Libera após 5 segundos
         setTimeout(() => { bloqueioDeEnvio = false; }, 5000); 
       }
+    } else {
+      status.textContent = "Status: Reconhecendo... (Distância: " + dist.toFixed(3) + ")";
     }
   }
 
-  document.getElementById("startBtn").onclick = start;
-  document.getElementById("capA").onclick = () => { refs.A = lastDescriptor; alert("Pessoa A guardada!"); };
+  startBtn.onclick = start;
+  document.getElementById("capA").onclick = () => { refs.A = lastDescriptor; alert("Pessoa A guardada!"); status.textContent = "Status: Pessoa A pronta."; };
   document.getElementById("clearBtn").onclick = () => { refs.A = null; alert("Limpo!"); };
 })();
 </script>
